@@ -1,0 +1,21 @@
+name: "onnx_whisper"
+platform: "onnxruntime_onnx"
+max_batch_size: 0
+
+input [
+  {
+    name: "mel"
+    data_type: TYPE_FP32
+    dims: [ 1, 80, -1 ]
+  }
+]
+
+output [
+  {
+    name: "encoder_hidden_states"
+    data_type: TYPE_FP32
+    dims: [ 1, 1500, 384 ]
+  }
+]
+
+dynamic_batching { }

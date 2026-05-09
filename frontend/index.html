@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+	<head>
+		<title>Mic Stream</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<style>
+			body {
+				font-family: Arial;
+				padding: 20px;
+			}
+
+			button {
+				margin-right: 10px;
+				padding: 10px;
+			}
+
+			#log {
+				margin-top: 20px;
+				padding: 10px;
+				background: #111;
+				color: #0f0;
+				height: 300px;
+				overflow-y: auto;
+				font-family: monospace;
+				font-size: 12px;
+				border-radius: 5px;
+			}
+
+			#transcript {
+				margin-top: 20px;
+				padding: 12px;
+				border: 1px solid #ddd;
+				border-radius: 6px;
+				background: #fafafa;
+			}
+
+			#partialText {
+				color: #666;
+				font-style: italic;
+				min-height: 24px;
+				margin-bottom: 10px;
+			}
+
+			#finalText {
+				color: #111;
+				white-space: pre-wrap;
+				line-height: 1.5;
+			}
+		</style>
+	</head>
+
+	<body>
+		<h2>Microphone Streaming</h2>
+
+		<button id="start">Start Mic</button>
+		<button id="stop">Stop</button>
+
+		<div id="transcript">
+			<h3>Transcript</h3>
+			<div id="partialText"></div>
+			<div id="finalText"></div>
+		</div>
+
+		<div id="log"></div>
+
+		<script>
+			let ws;
+			let stream;
+			let audioContext;
+			let sourceNode;
+			let processorNode;
+
+			const logBox = document.getElementById("log");
+			const partialText = document.getElementById("partialText");
+			const finalText = document.getElementById("finalText");
+			let finalTranscript = "";
+
+			function log(msg) {
+				const time = new Date().toLocaleTimeString();
+				logBox.innerHTML += `[${time}] ${msg}<br>`;
+				logBox.scrollTop = logBox.scrollHeight;
+			}
+
+			document.getElementById("start").onclick = async () => {
+				finalTranscript = "";
+				finalText.textContent = "";
+				partialText.textContent = "";
+				log("Starting WebSocket...");
+
+				ws = new WebSocket("ws://10.0.0.23:3000/ws");
+				ws.binaryType = "arraybuffer";
+
+				ws.onopen = async () => {
+					log("WebSocket connected");
+
+					stream = await navigator.mediaDevices.getUserMedia({
+						audio: true,
+					});
+					log("Microphone access granted");
+
+					audioContext = new (
+						window.AudioContext || window.webkitAudioContext
+					)({
+						sampleRate: 16000,
+					});
+
+					log(
+						"Audio context started at " +
+							audioContext.sampleRate +
+							" Hz"
+					);
+
+					// Tell backend exactly how incoming PCM frames are encoded.
+					ws.send(
+						JSON.stringify({
+							type: "audio_config",
+							sampleRate: audioContext.sampleRate,
+							channels: 1,
+							sampleWidth: 2,
+						})
+					);
+
+					sourceNode = audioContext.createMediaStreamSource(stream);
+					processorNode = audioContext.createScriptProcessor(
+						4096,
+						1,
+						1
+					);
+
+					processorNode.onaudioprocess = (event) => {
+						if (!ws || ws.readyState !== 1) return;
+
+						const input = event.inputBuffer.getChannelData(0);
+						const pcm = new Int16Array(input.length);
+
+						for (let i = 0; i < input.length; i++) {
+							const s = Math.max(-1, Math.min(1, input[i]));
+							pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+						}
+
+						ws.send(pcm.buffer);
+						log("Sent PCM chunk: " + pcm.byteLength + " bytes");
+					};
+
+					sourceNode.connect(processorNode);
+					processorNode.connect(audioContext.destination);
+					log("PCM streaming started");
+				};
+
+				ws.onclose = () => log("WebSocket closed");
+				ws.onerror = (e) => log("WebSocket error");
+				ws.onmessage = (event) => {
+					try {
+						const msg = JSON.parse(event.data);
+						if (msg.type === "transcript") {
+							const kind =
+								msg.kind ||
+								(msg.data && msg.data.kind) ||
+								"update";
+							const text =
+								msg.text ||
+								msg.transcript ||
+								(msg.data && msg.data.text) ||
+								"";
+
+							if (kind === "partial") {
+								partialText.textContent = text;
+							}
+
+							if (kind === "final") {
+								partialText.textContent = "";
+								finalTranscript = finalTranscript
+									? finalTranscript + "\n" + text
+									: text;
+								finalText.textContent = finalTranscript;
+							}
+
+							log("Transcript (" + kind + "): " + text);
+							return;
+						}
+						log("Message: " + event.data);
+					} catch (_err) {
+						log("Message: " + event.data);
+					}
+				};
+			};
+
+			document.getElementById("stop").onclick = () => {
+				log("Stopping...");
+
+				if (processorNode) processorNode.disconnect();
+				if (sourceNode) sourceNode.disconnect();
+				if (audioContext) audioContext.close();
+				if (stream) stream.getTracks().forEach((t) => t.stop());
+				if (ws) ws.close();
+			};
+		</script>
+	</body>
+</html>
