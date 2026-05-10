@@ -1,0 +1,26 @@
+name: "pyannote_diarization"
+backend: "python"
+max_batch_size: 0
+
+input [
+  {
+    name: "audio_float32"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "sample_rate"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  }
+]
+
+output [
+  {
+    name: "segments_json"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+instance_group [{ kind: KIND_GPU, count: 1 }]

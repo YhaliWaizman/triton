@@ -1,0 +1,13 @@
+services:
+  tritonserver:
+    image: nvcr.io/nvidia/tritonserver:24.01-py3
+    container_name: tritonserver
+    command: ["tritonserver", "--model-repository=/models"]
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
+    volumes:
+      - ./models:/models
+    gpus: all
+    restart: "no"

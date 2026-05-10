@@ -28,6 +28,7 @@ DEFAULT_SAMPLE_WIDTH = 2
 
 TRITON_GRPC_ADDR = os.getenv("TRITON_GRPC_ADDR", "localhost:8001")
 TRITON_MODEL_NAME = os.getenv("TRITON_MODEL_NAME", "onnx_whisper")
+TRITON_DIARIZATION_MODEL = os.getenv("TRITON_DIARIZATION_MODEL", "pyannote_diarization")
 PARTIAL_EMIT_THRESHOLD_BYTES = int(os.getenv("PARTIAL_EMIT_THRESHOLD_BYTES", "64000"))
 
 processor = WhisperProcessor.from_pretrained("openai/whisper-tiny")
@@ -76,6 +77,36 @@ async def transcribe_with_triton(
 		return ""
 
 	return await asyncio.to_thread(decode_from_encoder_hidden, encoder_hidden_states)
+
+async def diarize_with_triton(
+	triton_client: triton_grpc_aio.InferenceServerClient,
+	pcm_bytes: bytes,
+	sample_rate: int,
+	channels: int,
+) -> list:
+	if not pcm_bytes:
+		return []
+
+	audio = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+	if channels > 1:
+		audio = audio.reshape(-1, channels).mean(axis=1)
+
+	audio_input = InferInput("audio_float32", list(audio.shape), "FP32")
+	audio_input.set_data_from_numpy(audio)
+
+	sr_input = InferInput("sample_rate", [1], "INT32")
+	sr_input.set_data_from_numpy(np.array([sample_rate], dtype=np.int32))
+
+	result = await triton_client.infer(
+		model_name=TRITON_DIARIZATION_MODEL,
+		inputs=[audio_input, sr_input],
+		outputs=[InferRequestedOutput("segments_json")],
+	)
+	raw = result.as_numpy("segments_json")
+	if raw is None:
+		return []
+	return json.loads(raw[0])
+
 
 @app.get("/")
 def index(request: Request):
@@ -170,14 +201,30 @@ async def websocket_endpoint(websocket: WebSocket):
 	finally:
 		if triton_client is not None:
 			try:
-				final_text = await transcribe_with_triton(
-					triton_client,
-					bytes(pcm_buffer),
-					sample_rate,
-					channels,
+				final_text, segments = await asyncio.gather(
+					transcribe_with_triton(
+						triton_client,
+						bytes(pcm_buffer),
+						sample_rate,
+						channels,
+					),
+					diarize_with_triton(
+						triton_client,
+						bytes(pcm_buffer),
+						sample_rate,
+						channels,
+					),
 				)
-				if final_text:
-					await send_transcript("final", final_text)
+				if final_text or segments:
+					await websocket.send_text(
+						json.dumps({
+							"type": "transcript",
+							"kind": "final",
+							"text": final_text,
+							"transcript": final_text,
+							"segments": segments,
+						})
+					)
 			except Exception as e:
 				print("Final Triton inference failed:", e)
 				await send_transcript("error", str(e))
