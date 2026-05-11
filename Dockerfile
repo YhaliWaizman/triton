@@ -1,0 +1,4 @@
+FROM nvcr.io/nvidia/tritonserver:24.01-py3
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt

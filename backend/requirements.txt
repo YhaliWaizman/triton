@@ -1,0 +1,9 @@
+# FastAPI backend for serving the UI and proxying Triton inference
+torch
+transformers
+numpy
+fastapi
+uvicorn
+uvicorn[standard]
+tritonclient[grpc]
+Jinja2

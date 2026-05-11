@@ -1,0 +1,21 @@
+# PyTorch — install with CUDA 12.1 wheels to match the Triton 24.01 base image
+torch --extra-index-url https://download.pytorch.org/whl/cu121
+
+# Triton model backends
+pyannote.audio
+
+# Whisper / HuggingFace
+transformers
+numpy
+
+# Backend server (backend/server.py)
+fastapi
+uvicorn
+tritonclient[grpc]
+
+# gRPC service (backend/model.py)
+grpcio
+
+# Export / inspection scripts
+onnx
+librosa

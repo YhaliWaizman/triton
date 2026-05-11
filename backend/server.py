@@ -110,7 +110,7 @@ async def diarize_with_triton(
 
 @app.get("/")
 def index(request: Request):
-	return templates.TemplateResponse("index.html", { "request": request })
+	return templates.TemplateResponse(request, "index.html")
 
 
 @app.websocket("/ws")
@@ -149,7 +149,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 		while True:
 			message = await websocket.receive()
-
+			print(message)
 			if "text" in message and message["text"] is not None:
 				try:
 					payload = json.loads(message["text"])

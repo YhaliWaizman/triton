@@ -1,13 +1,42 @@
 services:
   tritonserver:
-    image: nvcr.io/nvidia/tritonserver:24.01-py3
+    build: .
+    image: tritonserver-pyannote:24.01
     container_name: tritonserver
     command: ["tritonserver", "--model-repository=/models"]
+    environment:
+      HF_TOKEN: ${HF_TOKEN}
     ports:
       - "8000:8000"
       - "8001:8001"
       - "8002:8002"
     volumes:
       - ./models:/models
-    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: triton-backend:latest
+    container_name: triton-backend
+    depends_on:
+      - tritonserver
+    environment:
+      TRITON_GRPC_ADDR: tritonserver:8001
+      TRITON_MODEL_NAME: onnx_whisper
+      TRITON_DIARIZATION_MODEL: pyannote_diarization
+      PARTIAL_EMIT_THRESHOLD_BYTES: "64000"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./frontend:/app/frontend
+      - ./saved_audio:/app/saved_audio
     restart: "no"
