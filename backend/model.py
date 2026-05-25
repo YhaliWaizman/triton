@@ -39,6 +39,9 @@ class StreamingASRService:
 			return_tensors="pt",
 		).input_features
 
+		# print(input_features)
+		print(type(input_features))
+
 		with torch.no_grad():
 			predicted_ids = self.model.generate(input_features)
 

@@ -87,7 +87,7 @@
 				partialText.textContent = "";
 				log("Starting WebSocket...");
 
-				ws = new WebSocket("ws://10.0.0.23:3000/ws");
+				ws = new WebSocket("ws://localhost:8080/ws");
 				ws.binaryType = "arraybuffer";
 
 				ws.onopen = async () => {

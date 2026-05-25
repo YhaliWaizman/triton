@@ -1,0 +1,14 @@
+{
+  "audio": "saved_audio/audio_20260513_174229.wav",
+  "model": "models/segmentation-3.0",
+  "device": "cpu",
+  "num_frames": 1,
+  "num_classes": 0,
+  "frame": {
+    "start": 0.0,
+    "step": 1.0,
+    "duration": 10.0
+  },
+  "speech_threshold": 0.5,
+  "segments": []
+}
